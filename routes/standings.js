@@ -9,7 +9,7 @@ export default async function standingsYear(request, reply) {
   const teamList = {};
 
   for (const league of leagues) {
-    const teams = await getStandings({
+    const { latestResultWeek, standings: teams } = await getStandings({
       season,
       leagueID: league.id,
       prefix: `${league.name}`,
@@ -23,6 +23,11 @@ export default async function standingsYear(request, reply) {
       teamList[teamID] = teamData;
     });
   }
+
+  // Round points for each team in standings
+  Object.values(teamList).forEach((team) => {
+    team.points = Math.round(team.points * 10) / 10;
+  });
 
   reply.send(sortTeamList(teamList, 'points'));
 }
