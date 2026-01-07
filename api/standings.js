@@ -4,23 +4,66 @@ import sortTeamList from '../utils/sort-team-list.js';
 export default async function getStandings({ season, leagueID, prefix = '' }) {
   try {
     // Get the standings from the MFL API
-    const standingsURL = `/${season}/export?TYPE=leagueStandings&L=${leagueID}&JSON=1`;
+    const weeklyResultsURL = `/${season}/export?TYPE=weeklyResults&L=${leagueID}&W=YTD&JSON=1`;
 
-    const standingsResponse = await getData(standingsURL);
-    const standingsTeams = standingsResponse.leagueStandings.franchise;
+    const weeklyResultsResponse = await getData(weeklyResultsURL);
+    const weeklyResults = weeklyResultsResponse.allWeeklyResults.weeklyResults;
+
+    const latestResultWeek =
+      weeklyResults[weeklyResults.length - 1]?.week || '1';
 
     const standings = {};
+    weeklyResults.forEach((weeklyResult) => {
+      const matchups = weeklyResult.matchup || []; // array of head-to-head matchups
+      const franchises = weeklyResult.franchise || []; // array of teams without a weekly matchup
 
-    standingsTeams.forEach((team) => {
-      standings[`${prefix}${team.id}`] = {
-        points: Number(team.pf).toFixed(2),
-        wins: Number(team.h2hw),
-        losses: Number(team.h2hl),
-        ties: Number(team.h2ht),
-      };
+      // Parse matchups
+      matchups.forEach((matchup) => {
+        const isRegularSeasonMatchup = (matchup.regularSeason || '0') === '1';
+        const teams = matchup.franchise || [];
+
+        teams.forEach((team) => {
+          // Initialize team in standings if not present
+          if (!standings[`${prefix}${team.id}`]) {
+            standings[`${prefix}${team.id}`] = {
+              points: 0,
+              wins: 0,
+              losses: 0,
+              ties: 0,
+            };
+          }
+
+          // Add to running tally of points for
+          standings[`${prefix}${team.id}`].points += Number(team.score || 0);
+
+          // Only count wins/losses/ties for regular season matchups
+          if (isRegularSeasonMatchup) {
+            standings[`${prefix}${team.id}`].wins += team.result == 'W' ? 1 : 0;
+            standings[`${prefix}${team.id}`].losses +=
+              team.result == 'L' ? 1 : 0;
+            standings[`${prefix}${team.id}`].ties += team.result == 'T' ? 1 : 0;
+          }
+        });
+      });
+
+      // Parse franchises
+      franchises.forEach((team) => {
+        // Initialize team in standings if not present
+        if (!standings[`${prefix}${team.id}`]) {
+          standings[`${prefix}${team.id}`] = {
+            points: 0,
+            wins: 0,
+            losses: 0,
+            ties: 0,
+          };
+        }
+
+        // Add to running tally of points for
+        standings[`${prefix}${team.id}`].points += Number(team.score || 0);
+      });
     });
 
-    return sortTeamList(standings, 'points');
+    return { latestResultWeek, standings: sortTeamList(standings, 'points') };
   } catch (error) {
     return { error };
   }

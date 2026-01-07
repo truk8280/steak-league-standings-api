@@ -10,7 +10,7 @@ export default async function standingsYear(request, reply) {
   const teamList = {};
 
   for (const league of leagues) {
-    const teams = await getStandings({
+    const { latestResultWeek, standings: teams } = await getStandings({
       season,
       leagueID: league.id,
       prefix: `${league.name}`,
@@ -47,14 +47,11 @@ export default async function standingsYear(request, reply) {
         return team;
       }
 
-      const gamesPlayed = teamData.wins + teamData.losses + teamData.ties;
-      if (gamesPlayed === Number(week)) {
-        return team;
-      }
-
       teamList[teamID] = teamData;
       teamList[teamID].points =
-        Number(liveData.score) + Number(teamData.points);
+        latestResultWeek == week
+          ? Number(teamData.points)
+          : Number(teamData.points) + Number(liveData.score);
       teamList[teamID].points = (
         Math.round(teamList[teamID].points * 100) / 100
       ).toFixed(2);
@@ -101,6 +98,12 @@ export default async function standingsYear(request, reply) {
       });
     }
   }
+
+  // Round points for each team in standings
+  Object.values(teamList).forEach((team) => {
+    team.points = Math.round(team.points * 10) / 10;
+    team.weeklyScore = Math.round(team.weeklyScore * 10) / 10;
+  });
 
   reply.send(sortTeamList(teamList, 'points'));
 }
